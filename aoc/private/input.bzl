@@ -4,6 +4,7 @@ COUNT_DAYS = {
     2025: 12,
     2024: 25,
     2023: 25,
+    2019: 25,
 }
 
 input_url_base = "https://adventofcode.com/{0}/day/{1}/input"
@@ -29,6 +30,7 @@ def _year_repo_impl(rctx):
     rctx.watch_tree(sample_root)
     for year, day_count in year_counts:
         year_dir = sample_root.get_child(str(year))
+        year_labels = []
         for day in range(1, day_count + 1):
             path = "{0}/day{1}".format(year, day)
             day_dir = year_dir.get_child("day{0}".format(day))
@@ -37,14 +39,17 @@ def _year_repo_impl(rctx):
                 'package(default_visibility = ["//visibility:public"])',
                 'filegroup(name = "input", srcs = ["input.txt"])',
             ]
+            year_labels.append("//{0}:input".format(path))
             for filename in _sample_files(day_dir):
+                target = filename.removesuffix(".txt")
                 rctx.symlink(day_dir.get_child(filename), "{0}/{1}".format(path, filename))
                 build.append(
                     'filegroup(name = "{0}", srcs = ["{1}"])'.format(
-                        filename.removesuffix(".txt"),
+                        target,
                         filename,
                     ),
                 )
+                year_labels.append("//{0}:{1}".format(path, target))
             rctx.file("{0}/BUILD.bazel".format(path), "\n".join(build) + "\n")
 
             rctx.download(
@@ -52,6 +57,19 @@ def _year_repo_impl(rctx):
                 headers = {"Cookie": rctx.attr.auth[:-1]},
                 output = "{0}/input.txt".format(path),
             )
+
+        rctx.file(
+            "{0}/BUILD.bazel".format(year),
+            "\n".join([
+                'package(default_visibility = ["//visibility:public"])',
+                "filegroup(",
+                '    name = "files",',
+                "    srcs = [",
+            ] + ['        "{0}",'.format(label) for label in year_labels] + [
+                "    ],",
+                ")",
+            ]) + "\n",
+        )
 
 input_repo = repository_rule(
     attrs = {
